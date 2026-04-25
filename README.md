@@ -15,6 +15,7 @@ license: apache-2.0
 
 🔗 **Quick Links:**
 * **Trained Model Weights (LoRA):** [AtulK29/LeakGuard-3B-Auditor-L2](https://huggingface.co/AtulK29/LeakGuard-3B-Auditor-L2)
+* **Hugging Face Blog/discussion:**[Curing "LLM Laziness": How We Built an RL Auditor to Catch Supply Chain Fraud](https://huggingface.co/spaces/AtulK29/LGDemo/discussions/1)
 * **Live Environment API:** [AtulK29/LGDemo](https://atulk29-lgdemo.hf.space/docs) (Direct URL)
 * **Hugging Face Space:** [Atulk29/LGDemo](https://huggingface.co/spaces/AtulK29/LGDemo)
 * **Github Repository:** [Leakguarddemo](https://github.com/Atul-Kumar29/LGworking) 
