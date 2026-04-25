@@ -33,6 +33,8 @@ class LeakGuardEnvironment(Environment):
         self.state = LeakGuardState()
 
     def _generate_adversarial_invoices(self) -> None:
+        # Clear old invoices to focus the model on new data
+        self.state.active_invoices = []
         num_new = random.randint(1, 3)
         items = list(MARKET_DATABASE.keys())
         vendors = list(VENDOR_LEDGER.keys())
@@ -43,8 +45,9 @@ class LeakGuardEnvironment(Environment):
             vendor = random.choice(vendors)
             
             base_price = MARKET_DATABASE[item]
-            adversarial_price = round(base_price * random.uniform(0.95, 1.15), 2)
-            is_valid = random.random() > 0.3
+            # Introduce price variance as a secondary leak signal
+            adversarial_price = round(base_price * random.uniform(0.90, 1.30), 2)
+            is_valid = random.random() > 0.4 # Higher chance of leaks for training
             
             invoice = Invoice(
                 id=self.state.invoice_counter,
@@ -78,22 +81,25 @@ class LeakGuardEnvironment(Environment):
         return self._get_observation()
 
     def step(self, action_dict: dict) -> Tuple[str, float, bool, dict]:
-        action = LeakGuardAction(**action_dict)
+        # action_dict handling for robust Pydantic conversion
+        try:
+            action = LeakGuardAction(**action_dict)
+        except:
+            return self._get_observation("Invalid Action Format"), -1.0, False, {}
+
         reward = 0.0
         tool_response = ""
         
-        if random.random() < 0.05:
-            self.state.active_compliance_rules = "UPDATED RULE: Zero variance allowed. All external vendors require strict GRN."
-
+        # Tool usage logic (Efficiency check)
         if action.decision == "SEARCH_WEB":
-            reward -= 0.01 
+            reward -= 0.05 
             if action.item_name in MARKET_DATABASE:
                 tool_response = f"Market Median for {action.item_name} is ${MARKET_DATABASE[action.item_name]:.2f}"
             else:
                 tool_response = "Item not found in market database."
                 
         elif action.decision == "QUERY_HISTORY":
-            reward -= 0.01
+            reward -= 0.05
             if action.vendor_id in VENDOR_LEDGER:
                 data = VENDOR_LEDGER[action.vendor_id]
                 tool_response = f"Ledger - {action.vendor_id}: {data['reliability']}% reliable, {data['past_flags']} past flags."
@@ -104,48 +110,48 @@ class LeakGuardEnvironment(Environment):
             target_invoice = next((inv for inv in self.state.active_invoices if inv.id == action.invoice_id), None)
             
             if target_invoice:
-                if action.decision == "APPROVE" and target_invoice.grn_match:
-                    self.state.trust_score = min(100.0, self.state.trust_score + 2.0)
-                    reward += 0.1
+                # HIGH SIGNAL REWARDS
+                if action.decision == "FLAG_FOR_AUDIT" and not target_invoice.grn_match:
+                    reward += 2.0  # BIG WIN: Caught a legitimate leak
+                    self.state.trust_score = min(100.0, self.state.trust_score + 5.0)
+                
+                elif action.decision == "APPROVE" and target_invoice.grn_match:
+                    reward += 0.5  # Standard positive for correct approval
+                    self.state.trust_score = min(100.0, self.state.trust_score + 1.0)
+                
                 elif action.decision == "APPROVE" and not target_invoice.grn_match:
+                    reward -= 2.5  # CRITICAL LOSS: Allowed a leak
                     self.state.leaked_revenue += target_invoice.amount
-                    self.state.trust_score -= 1.0
-                    reward -= 0.2
-                elif action.decision == "FLAG_FOR_AUDIT" and not target_invoice.grn_match:
-                    reward += 0.3
-                elif action.decision == "FLAG_FOR_AUDIT" and target_invoice.grn_match:
-                    self.state.trust_score -= 5.0
-                elif action.decision == "REJECT" and not target_invoice.grn_match:
-                    self.state.trust_score -= 2.0
-                    reward += 0.1
-                elif action.decision == "REJECT" and target_invoice.grn_match:
                     self.state.trust_score -= 15.0
-                    reward -= 0.3
-                elif action.decision == "NEGOTIATE" and action.discount_pct is not None:
-                    if action.discount_pct > 0.20:
-                        self.state.trust_score -= 10.0
-                        tool_response = f"Vendor rejected {action.discount_pct*100}% discount. Trust penalized."
-                        reward -= 0.1
+                
+                elif (action.decision in ["REJECT", "FLAG_FOR_AUDIT"]) and target_invoice.grn_match:
+                    reward -= 1.5  # FALSE ALARM: Penalize for inefficiency
+                    self.state.trust_score -= 10.0
+
+                elif action.decision == "NEGOTIATE" and action.discount_pct:
+                    if not target_invoice.grn_match or action.discount_pct > 0.25:
+                        reward -= 0.5
+                        tool_response = "Negotiation failed: unreasonable terms or bad invoice."
                     else:
                         savings = target_invoice.amount * action.discount_pct
+                        reward += 1.0
                         self.state.leaked_revenue = max(0.0, self.state.leaked_revenue - savings)
-                        self.state.trust_score += 1.0
-                        tool_response = f"Vendor accepted {action.discount_pct*100}% discount. Saved ${savings:.2f}."
-                        reward += 0.2
+                        tool_response = f"Negotiation successful. Saved ${savings:.2f}."
 
                 self.state.active_invoices.remove(target_invoice)
             else:
-                tool_response = "Invalid or missing invoice ID."
+                reward -= 0.5 # Penalty for hallucinating invoice IDs
+                tool_response = f"Hallucination Error: Invoice ID {action.invoice_id} not found."
 
         self.state.current_turn += 1
         self._generate_adversarial_invoices()
         
         done = self.state.current_turn >= self.state.max_turns
         
+        # Final evaluation at the end of the episode
         if done:
-            final_reward = (self.state.trust_score / 100.0) - min(1.0, self.state.leaked_revenue / 15000.0)
-            reward += final_reward
-            
-        clamped_reward = max(0.0001, min(0.9999, float(reward)))
+            final_metric = (self.state.trust_score / 100.0) - (self.state.leaked_revenue / 10000.0)
+            reward += final_metric
         
-        return self._get_observation(tool_response), clamped_reward, done, {}
+        # NO CLAMPING: We want raw negative/positive gradients for GRPO
+        return self._get_observation(tool_response), float(reward), done, {}
