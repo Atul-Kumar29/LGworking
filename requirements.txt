@@ -1,0 +1,13 @@
+torch
+transformers
+peft
+accelerate
+bitsandbytes
+trl
+unsloth_zoo
+unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git
+openenv-core>=0.2.0
+pydantic
+requests
+fastapi
+uvicorn
