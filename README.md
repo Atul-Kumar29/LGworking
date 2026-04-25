@@ -55,17 +55,17 @@ We implemented a strict, non-clamped reward function to shape the model's financ
 By exposing the 3B model to this harsh environment, it successfully deduced the underlying supply-chain logic. 
 
 ### 1. The Smoothed Reward Trend (The "Aha!" Moment)
-*(Include your smoothed 15-step moving average graph here)*
+
 ![Smoothed Reward Curve](smoothed_reward_curve.png)
 > **Analysis:** Despite the high-temperature exploration, the 15-step moving average shows a definitive upward trajectory. Around Step 150, the agent stops randomly guessing and consistently starts hunting high-markup invoices to achieve the maximum `+3.0` payout per step.
 
 ### 2. The Raw Reward Distribution
-*(Include your raw green reward barcode graph here)*
+
 ![Raw Reward Curve](reward_curve.png)
 > **Analysis:** The dense clustering of peaks hitting the upper bound on the right half of the graph visualizes the GRPO algorithm successfully shifting the policy toward the optimal auditing strategy.
 
 ### 3. Training Loss
-*(Include your red loss curve graph here)*
+
 ![Training Loss Curve](loss_curve.png)
 > **Analysis:** The surrogate policy objective remains highly stable (hovering near 0.0), indicating safe weight updates without catastrophic forgetting of its base instruction-following capabilities.
 
