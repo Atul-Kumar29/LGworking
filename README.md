@@ -88,6 +88,13 @@ The agent interacts with the `OpenEnv` FastAPI server using strict JSON outputs.
 3. **Investigate (Token Penalty):** `{"decision": "SEARCH_WEB", "item_name": "<string>"}`
 
 ---
+## 🚀 The Result: A Production-Ready Virtual Auditor
+
+LeakGuardAI successfully transformed from a lazy, text-predicting SFT model into a deterministic, strict financial auditor that interacts seamlessly with external APIs using JSON.
+
+It balances the human elements of business (Vendor Trust) against raw mathematics, bringing true intelligent automation to the Procure-to-Pay cycle.
+
+---
 
 ## 🚀 Evaluation Guide for Judges
 
