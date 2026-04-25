@@ -22,31 +22,39 @@ license: apache-2.0
 
 ---
 
-## 📌 The Problem: "Majority Class Collapse"
-Most LLMs make terrible financial auditors. When tasked with finding revenue leaks (e.g., over-billing), standard Supervised Fine-Tuning (SFT) models suffer from "Majority Class Collapse." Because 90% of real-world invoices are clean, the LLM simply learns to rubber-stamp `APPROVE` on everything, ignoring the nuanced math.
+## 📌 The Core Problem: Revenue Leakage & "Majority Class Collapse"
 
-**Our objective:** Build an agent that actively hunts for discrepancies and understands mathematical thresholds, rather than just guessing labels.
+**The Business Need:** In global supply chains, the Procure-to-Pay (P2P) cycle processes millions of invoices daily. Human auditors can only sample 1-2%, while rigid, rule-based software flags too many false positives. Consequently, billions of dollars are lost to subtle "revenue leakage"—hidden 10-15% vendor overcharges or missing Goods Receipt Notes (GRNs).
+
+**The AI Hurdle:** When tasked with automating this, standard Supervised Fine-Tuning (SFT) models suffer from **"Majority Class Collapse."** Because 90% of real-world historical data is perfectly clean, the LLM simply gets lazy. It learns to rubber-stamp `APPROVE` on everything, ignoring the nuanced math to minimize its loss function. We needed an agent that actively hunts for discrepancies.
 
 ---
 
-## 🧠 Our Solution: GRPO & The "Strict Boss" Matrix
+## 🌍 The Environment: Modeling the AP Ecosystem
+To train the model, we built a custom PyTorch **OpenEnv** simulation that acts as a digital twin of a corporate Accounts Payable (AP) department. 
+* It dynamically generates adversarial invoices against simulated market benchmarks.
+* It tracks **Vendor Ledgers**, recording past reliability and flag history.
+* **The Tension:** It enforces a strict trade-off. Catching leaks saves money, but being overly aggressive and rejecting valid invoices destroys the **Vendor Trust Score** (representing real-world supply chain velocity and friction).
 
-To cure the model's laziness, we moved away from SFT and utilized **Reinforcement Learning** via **GRPO (Group Relative Policy Optimization)**. 
+---
 
-### 1. The Core Logic (The 15% Rule)
-We built an adversarial OpenEnv simulation where invoices are dynamically generated. A "Leak" is mathematically defined as any invoice where the billed amount exceeds the market benchmark by **>15%**, or if it lacks a valid Goods Receipt Note (GRN). We did *not* tell the model this rule directly; it had to discover it through trial and error.
+## 🧠 Our Solution: GRPO, Entropy, & "Theory of Mind"
+To cure the model's laziness, we abandoned SFT and utilized **Reinforcement Learning** via **GRPO (Group Relative Policy Optimization)**. 
+
+### 1. Developing a "Theory of Mind"
+Through high-entropy exploration, the agent develops a rudimentary "Theory of Mind" regarding its environment. It realizes it operates in a multi-agent ecosystem where vendors have distinct behaviors. It learns to use investigative tools (`QUERY_HISTORY`) to assess intent: *Is this vendor making an honest mistake, or are they a historically bad actor probing our defenses?*
 
 ### 2. The Model & Training Framework
 * **Base Architecture:** `Llama-3.2-3B-Instruct`
 * **Framework:** Unsloth for ultra-fast, memory-efficient LoRA training.
 * **Temperature Injection:** We trained with high entropy (`temp=1.3`) to force the model to explore mathematical boundaries instead of collapsing into repetitive approvals.
 
-### 3. The Reward Matrix
-We implemented a strict, non-clamped reward function to shape the model's financial intuition:
+### 3. The Core Logic & Reward Matrix
+A "Leak" in our environment is mathematically defined as any billed amount exceeding the market benchmark by **>15%**, or lacking a valid GRN. We did *not* tell the model this rule; it had to discover it via a strict, non-clamped reward function:
 * **+2.0 (Massive Win):** Successfully using `FLAG_FOR_AUDIT` on a hidden 15%+ markup.
 * **+0.5 (Standard):** Correctly approving a valid invoice.
 * **-2.5 (Critical Penalty):** Approving an invoice with a missing GRN or high markup (Leaking Revenue).
-* **-1.0 (False Alarm):** Flagging a perfectly fine vendor (Hurts Trust Score).
+* **-1.0 (False Alarm):** Flagging a perfectly fine vendor (Hurting the Trust Score).
 
 ---
 
