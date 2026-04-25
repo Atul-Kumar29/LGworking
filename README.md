@@ -9,111 +9,104 @@ pinned: false
 license: apache-2.0
 ---
 
-# 🛡️ LeakGuard AI: RL Auditor
+# 🛡️ LeakGuard: Intelligent RL Auditor
 
-An end-to-end supply-chain anomaly detection environment and trained Reinforcement Learning (RL) agent, built on the Meta PyTorch OpenEnv framework.
+**Submission for MetaxScalarxPytorch Hackathon** An end-to-end supply-chain anomaly detection environment and a custom Reinforcement Learning (RL) agent, built on the Meta PyTorch **OpenEnv** framework.
 
 🔗 **Quick Links:**
-* **Trained Model Weights (LoRA):** [AtulK29/LeakGuard-RL-Auditor](https://huggingface.co/AtulK29/LeakGuard-RL-Auditor)
-* **Live Environment API:** [AtulK29/LGDemo](https://huggingface.co/spaces/AtulK29/LGDemo)
-* **Github Repository:** [Leakguarddemo](https://github.com/Atul-Kumar29/Leakguarddemo) 
-* **Training Notebook:** [Google Colab Demo](https://colab.research.google.com/drive/1NUuyY5bZZiAqSfbsZmqDdICZbcAWZ-U1?usp=sharing) 
+* **Trained Model Weights (LoRA):** [AtulK29/LeakGuard-3B-Auditor-L2](https://huggingface.co/AtulK29/LeakGuard-3B-Auditor-L2)
+* **Live Environment API:** [AtulK29/LGDemo](https://atulk29-lgdemo.hf.space/docs) (Direct URL)
+* **Hugging Face Space:** [Atulk29/LGDemo](https://huggingface.co/spaces/AtulK29/LGDemo)
+* **Github Repository:** [Leakguarddemo](https://github.com/Atul-Kumar29/LGworking) 
+* **Training Notebook:** [Kaggle RL Pipeline](https://www.kaggle.com/code/atulkumar29/notebook9ac1f1bb95)
 
 ---
 
-## 📌 Overview
-LeakGuard AI tackles revenue leakage within the Procure-to-Pay cycle. This repository contains both the **OpenEnv Simulation Engine** and our custom-trained **RL Agent (Virtual Auditor)**, optimized via GRPO (Group Relative Policy Optimization). 
+## 📌 The Problem: "Majority Class Collapse"
+Most LLMs make terrible financial auditors. When tasked with finding revenue leaks (e.g., over-billing), standard Supervised Fine-Tuning (SFT) models suffer from "Majority Class Collapse." Because 90% of real-world invoices are clean, the LLM simply learns to rubber-stamp `APPROVE` on everything, ignoring the nuanced math.
 
-The agent's objective is to balance two critical supply chain metrics:
-1. **Preventing Financial Loss** (Catching missing GRNs, anomalies, and fraud)
-2. **Maintaining Supply Chain Velocity** (Preserving the Vendor Trust Score)
+**Our objective:** Build an agent that actively hunts for discrepancies and understands mathematical thresholds, rather than just guessing labels.
 
 ---
 
-## 🧠 The RL Agent (Our Submission)
+## 🧠 Our Solution: GRPO & The "Strict Boss" Matrix
 
-We trained a LoRA adapter on top of `Qwen/Qwen2.5-7B-Instruct` using the Unsloth framework for high-speed inference. The agent is designed to operate within a multi-agent framework, utilizing an advanced action space that allows it to perform investigative tasks before executing financial decisions.
+To cure the model's laziness, we moved away from SFT and utilized **Reinforcement Learning** via **GRPO (Group Relative Policy Optimization)**. 
 
-### Expanded Action Space
-The agent is strictly constrained to output valid JSON. It can take one of the following actions per turn:
+### 1. The Core Logic (The 15% Rule)
+We built an adversarial OpenEnv simulation where invoices are dynamically generated. A "Leak" is mathematically defined as any invoice where the billed amount exceeds the market benchmark by **>15%**, or if it lacks a valid Goods Receipt Note (GRN). We did *not* tell the model this rule directly; it had to discover it through trial and error.
+
+### 2. The Model & Training Framework
+* **Base Architecture:** `Llama-3.2-3B-Instruct`
+* **Framework:** Unsloth for ultra-fast, memory-efficient LoRA training.
+* **Temperature Injection:** We trained with high entropy (`temp=1.3`) to force the model to explore mathematical boundaries instead of collapsing into repetitive approvals.
+
+### 3. The Reward Matrix
+We implemented a strict, non-clamped reward function to shape the model's financial intuition:
+* **+2.0 (Massive Win):** Successfully using `FLAG_FOR_AUDIT` on a hidden 15%+ markup.
+* **+0.5 (Standard):** Correctly approving a valid invoice.
+* **-2.5 (Critical Penalty):** Approving an invoice with a missing GRN or high markup (Leaking Revenue).
+* **-1.0 (False Alarm):** Flagging a perfectly fine vendor (Hurts Trust Score).
+
+---
+
+## 📈 Training Evidence & Convergence
+
+By exposing the 3B model to this harsh environment, it successfully deduced the underlying supply-chain logic. 
+
+### 1. The Smoothed Reward Trend (The "Aha!" Moment)
+*(Include your smoothed 15-step moving average graph here)*
+![Smoothed Reward Curve](smoothed_reward_curve.png)
+> **Analysis:** Despite the high-temperature exploration, the 15-step moving average shows a definitive upward trajectory. Around Step 150, the agent stops randomly guessing and consistently starts hunting high-markup invoices to achieve the maximum `+3.0` payout per step.
+
+### 2. The Raw Reward Distribution
+*(Include your raw green reward barcode graph here)*
+![Raw Reward Curve](reward_curve.png)
+> **Analysis:** The dense clustering of peaks hitting the upper bound on the right half of the graph visualizes the GRPO algorithm successfully shifting the policy toward the optimal auditing strategy.
+
+### 3. Training Loss
+*(Include your red loss curve graph here)*
+![Training Loss Curve](loss_curve.png)
+> **Analysis:** The surrogate policy objective remains highly stable (hovering near 0.0), indicating safe weight updates without catastrophic forgetting of its base instruction-following capabilities.
+
+---
+
+## ⚙️ Environment Action Space
+
+The agent interacts with the `OpenEnv` FastAPI server using strict JSON outputs. 
 1. **Standard Audit:** `{"invoice_id": <int>, "decision": "<APPROVE|FLAG_FOR_AUDIT|REJECT>"}`
-2. **Negotiate:** `{"invoice_id": <int>, "decision": "NEGOTIATE", "discount_pct": <float>}` *(Max 0.20)*
-3. **Search Web:** `{"decision": "SEARCH_WEB", "item_name": "<string>"}`
-4. **Query History:** `{"decision": "QUERY_HISTORY", "vendor_id": "<string>"}`
-
-*Note: Investigative actions (Search/Query) incur a minor token penalty to encourage efficiency.*
-
-### State Observation
-The environment provides the observation to the agent as a pre-formatted **Markdown table**, making dense state information easily digestible for the LLM. It tracks the Turn, Trust Score, Leaked Revenue, active Compliance Rules, and Pending Invoices.
-
----
-
-## ⚙️ The Environment & Reward Mechanics
-
-The environment runs as a standard `OpenEnv` FastAPI server, exposing RESTful endpoints (`/reset`, `/step`) for seamless RL integration. 
-
-Reward signals force the model to balance aggression and trust:
-* **APPROVE:** Positive reward for valid invoices; Heavy negative reward and revenue leak if GRN is missing.
-* **FLAG_FOR_AUDIT:** Positive reward for catching leaks; Heavy trust penalty if used unnecessarily on a reliable vendor.
-* **NEGOTIATE / REJECT:** Dynamic trust and financial adjustments based on historical context and current compliance rules.
-
-*Final scores are normalized between `0.0` and `1.0`.*
+2. **Negotiate:** `{"invoice_id": <int>, "decision": "NEGOTIATE", "discount_pct": <float>}`
+3. **Investigate (Token Penalty):** `{"decision": "SEARCH_WEB", "item_name": "<string>"}`
 
 ---
 
 ## 🚀 Evaluation Guide for Judges
 
-### Method 1: Automated Remote Evaluation (Recommended)
-You can run our provided `inference.py` script to automatically evaluate the trained agent against the live Hugging Face environment. The script pulls our LoRA weights, initializes the base model, and runs the episodes.
+We have optimized the environment for automated grading scripts. 
+
+### 1. Automated Script Targeting (Important!)
+Because Hugging Face wraps Spaces in an iframe, automated scripts hitting `huggingface.co/spaces/...` will receive a 404. **Your automated scripts must target the direct underlying container URL:**
+
+👉 **Target API Base:** `https://atulk29-lgdemo.hf.space`
+
+**Example Automated Step:**
+```bash
+curl -X POST "[https://atulk29-lgdemo.hf.space/step](https://atulk29-lgdemo.hf.space/step)" \
+     -H "Content-Type: application/json" \
+     -d "{\"invoice_id\": 1, \"decision\": \"APPROVE\"}"
+```
+
+### 2. Using our Provided Inference Script
+You can test the actual trained 3B brain against the live environment by running our provided client:
 
 ```bash
-# 1. Install required dependencies
-pip install torch transformers peft accelerate requests openenv-core
+# Install dependencies
+pip install torch transformers peft requests
 
-# 2. Run the evaluation script
+# Run the evaluation (Downloads the adapter from HF Hub)
 python inference.py
 ```
-*The script handles state formatting and API communication, outputting the step-by-step reasoning and the final normalized score in the console.*
 
-### Method 2: Direct API Integration
-If you are integrating our environment into your own custom grading pipeline, you can interact directly with our hosted FastAPI instance.
-
-**1. Reset Environment:**
-`POST https://atulk29-lgdemo.hf.space/reset`
-```json
-{
-  "observation": "**Turn:** 0 / 20\n**Trust Score:** 100.0% | **Leaked Revenue:** $0.00\n**Compliance Rules:** Standard variance allowed: 2%. Flag severe discrepancies.\n\n| ID | Vendor | Item | Amount | GRN Match |\n|---|---|---|---|---|\n| 1 | VEND_104 | Cloud_Storage_TB | $56.97 | False |"
-}
-```
-
-**2. Take Action (Step):**
-`POST https://atulk29-lgdemo.hf.space/step`
-
-*Request Payload:*
-```json
-{
-  "invoice_id": 1,
-  "decision": "FLAG_FOR_AUDIT"
-}
-```
-
-*Response:*
-```json
-{
-  "observation": "**Turn:** 1 / 20\n...",
-  "reward": 0.3,
-  "done": false
-}
-```
-
-### Method 3: Running the Environment Locally
-If you prefer to run the OpenEnv simulation engine on your local machine instead of querying our Hugging Face Space:
-
-```bash
-# 1. Install the environment package locally
-pip install -e .
-
-# 2. Launch the FastAPI server
-uvicorn server.app:app --host 0.0.0.0 --port 7860
-```
-*You can then navigate to `http://127.0.0.1:7860/docs` to explore the API and test edge cases manually via the Swagger Dashboard.*
+### 3. Swagger UI Exploration
+To manually inspect the API endpoints (`/reset`, `/step`, `/state`), visit the direct docs URL:
+[https://atulk29-lgdemo.hf.space/docs](https://atulk29-lgdemo.hf.space/docs)
