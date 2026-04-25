@@ -18,7 +18,7 @@ license: apache-2.0
 * **Live Environment API:** [AtulK29/LGDemo](https://atulk29-lgdemo.hf.space/docs) (Direct URL)
 * **Hugging Face Space:** [Atulk29/LGDemo](https://huggingface.co/spaces/AtulK29/LGDemo)
 * **Github Repository:** [Leakguarddemo](https://github.com/Atul-Kumar29/LGworking) 
-* **Training Notebook:** [Kaggle RL Pipeline](https://www.kaggle.com/code/atulkumar29/notebook9ac1f1bb95)
+* **Training Notebook:** [Kaggle RL Pipeline](https://www.kaggle.com/code/atulkumar29/notebook9ac1f1bb95) (> **Note to Judges:** If running this notebook manually in Colab/Kaggle, please restart the kernel manually after this installation cell to ensure dependencies load correctly. The programmatic restart command (`os._exit(00)`) has been commented out so it does not interrupt automated execution scripts.)
 
 ---
 
